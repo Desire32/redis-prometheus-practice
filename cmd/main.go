@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -19,13 +21,18 @@ type Dict struct {
 
 func main() {
 	// env
-	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
 
-	jsonPath := os.Getenv("JSON_PATH")
+	rdb := redis.NewClient(&redis.Options{
+		Addr: os.Getenv("REDIS_ADDR"),
+		DB:   0,
+	})
 
+	jsonPath := "../dict.json"
 	dict, _ := jsonDecode(jsonPath)
 
-	redisConn(dict)
+	redisConn(rdb, dict)
+
 }
 
 func jsonDecode(jsonPath string) ([]Dict, error) {
@@ -36,6 +43,7 @@ func jsonDecode(jsonPath string) ([]Dict, error) {
 	defer file.Close()
 
 	var dict []Dict
+	// decode
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&dict); err != nil {
 		log.Fatal(err)
@@ -43,20 +51,17 @@ func jsonDecode(jsonPath string) ([]Dict, error) {
 	return dict, nil
 }
 
-func redisConn(dict []Dict) {
+func redisConn(rdb *redis.Client, dict []Dict) {
 	ctx := context.Background()
-
-	rdb := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("REDIS_ADDR"),
-		DB:   0,
-	})
 
 	for _, v := range dict {
 		marshal, err := json.Marshal(v)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if err := rdb.RPush(ctx, os.Getenv("LIST_NAME"), marshal).Err(); err != nil {
+		key := fmt.Sprintf("word:%s", v.Word)
+
+		if err := rdb.SetEx(ctx, key, marshal, 15*time.Second).Err(); err != nil {
 			log.Fatal(err)
 		}
 	}
