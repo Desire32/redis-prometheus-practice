@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"time"
 
+	prm "redis/cmd/prometheus"
+
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -26,6 +30,12 @@ type Data struct {
 
 func NewData() *Data {
 	_ = godotenv.Load("../.env")
+
+	// server
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":2112", nil)
+	}()
 
 	rdb := redis.NewClient(&redis.Options{
 		Addr: os.Getenv("REDIS_ADDR"),
@@ -87,13 +97,20 @@ func (ctx *Data) redisConn(dict []Dict) {
 	}
 
 	for {
+
 		random := rand.Intn(int(length))
 
 		element, err := ctx.rdb.LIndex(ctx.ctx, os.Getenv("LIST_NAME"), int64(random)).Result()
+
 		if err != nil {
 			log.Fatal(err)
 		}
+
 		_ = ctx.rdb.LRem(ctx.ctx, os.Getenv("LIST_NAME"), 1, element)
+
+		prm.RedisPopTotal.WithLabelValues("delete").Inc()
+
+		log.Printf("Deleted element: %s (remaining: %d)\n", element, length-1)
 
 		time.Sleep(time.Second * 5)
 	}
