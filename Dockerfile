@@ -6,7 +6,7 @@ ADD . /app
 
 WORKDIR /app
 
-COPY go.mod go.sum .env dict.json ./
+COPY go.mod go.sum ./
 
 RUN go mod tidy
 
