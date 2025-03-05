@@ -1,18 +1,26 @@
-FROM golang:1.21 AS builder
+FROM golang:1.24.1-alpine as builder
+
+RUN mkdir /app
+
+ADD . /app
 
 WORKDIR /app
 
-COPY . .
+COPY go.mod go.sum .env dict.json ./
 
 RUN go mod tidy
 
-RUN go build -o main .
+COPY . .
 
-FROM gcr.io/distroless/base-debian11
+RUN go build ./main.go
+
+FROM alpine:latest
 
 WORKDIR /root/
 
 COPY --from=builder /app/main .
-COPY --from=builder /app/.env .
+
+EXPOSE 2112
 
 CMD ["./main"]
+

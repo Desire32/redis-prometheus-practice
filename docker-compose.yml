@@ -1,4 +1,14 @@
 services:
+  go-app:
+    build: .
+    container_name: go-app
+    ports:
+      - "2112:2112"
+    volumes:
+      - ./dict.json:/app/dict.json
+      - ./.env:/app/.env
+    networks:
+      - my_network
   redis:
     image: redis:latest
     container_name: redis_service
@@ -7,8 +17,9 @@ services:
       - "6379:6379"
     volumes:
       - ./redis.conf:/usr/local/etc/redis/redis.conf
-      - redis_data:/data
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+      - redis_data:/var/lib/redis
+    networks:
+      - my_network
 
   prometheus:
     image: prom/prometheus
@@ -16,11 +27,11 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
     ports:
-      - 9090:9090
-    restart: unless-stopped
+      - "9090:9090"
     volumes:
-      - ./prometheus:/etc/prometheus
-      - prom_data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - my_network
 
   grafana:
     image: grafana/grafana
@@ -33,7 +44,13 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=grafana
     volumes:
       - ./grafana:/etc/grafana/provisioning/datasources
+    networks:
+      - my_network
 
 volumes:
   redis_data:
   prom_data:
+
+networks:
+  my_network:
+    driver: bridge

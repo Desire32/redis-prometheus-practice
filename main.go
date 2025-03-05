@@ -9,9 +9,8 @@ import (
 	"os"
 	"time"
 
-	prm "redis/cmd/prometh"
-
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
@@ -28,8 +27,20 @@ type Data struct {
 	rdb *redis.Client
 }
 
+var RedisPopTotal = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "redis_pop_total",
+		Help: "deleting objects",
+	},
+	[]string{"objects"},
+)
+
+func init() {
+	prometheus.MustRegister(RedisPopTotal)
+}
+
 func NewData() *Data {
-	_ = godotenv.Load("../.env")
+	_ = godotenv.Load("./.env")
 
 	// server
 	go func() {
@@ -53,13 +64,17 @@ func NewData() *Data {
 func main() {
 	data := NewData()
 
-	jsonPath := "../dict.json"
+	// jsonPath := "./dict.json"
+	jsonPath := "/app/dict.json"
+
 	dict, err := data.jsonDecode(jsonPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	data.redisConn(dict)
+
+	select {}
 
 }
 
@@ -110,7 +125,7 @@ func (ctx *Data) redisConn(dict []Dict) {
 
 		_ = ctx.rdb.LRem(ctx.ctx, os.Getenv("LIST_NAME"), 1, element)
 
-		prm.RedisPopTotal.WithLabelValues("delete").Inc()
+		RedisPopTotal.WithLabelValues("delete").Inc()
 
 		log.Printf("Deleted element: %s (remaining: %d)\n", element, length)
 
