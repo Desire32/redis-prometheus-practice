@@ -1,15 +1,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
-// json format
 type Dict struct {
 	Word          string `json:"word"`
 	Transcription string `json:"transcription"`
@@ -18,33 +18,46 @@ type Dict struct {
 }
 
 func main() {
-
 	// env
 	_ = godotenv.Load(".env")
 
-	var dict []Dict
+	jsonPath := os.Getenv("JSON_PATH")
 
-	fmt.Print(jsonDecode(dict, os.Getenv("JSON_PATH")))
+	dict, _ := jsonDecode(jsonPath)
+
+	redisConn(dict)
 }
 
-// json encoder
-func jsonDecode(dict []Dict, json_s string) []Dict {
-	file_dict, _ := os.Open(json_s)
-
-	defer file_dict.Close()
-
-	encrypt_dict := json.NewDecoder(file_dict)
-	if err := encrypt_dict.Decode(&dict); err != nil {
+func jsonDecode(jsonPath string) ([]Dict, error) {
+	file, err := os.Open(jsonPath)
+	if err != nil {
 		log.Fatal(err)
 	}
-	return dict
+	defer file.Close()
+
+	var dict []Dict
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&dict); err != nil {
+		log.Fatal(err)
+	}
+	return dict, nil
 }
 
-// func redisConn() {
+func redisConn(dict []Dict) {
+	ctx := context.Background()
 
-// 	rdb := redis.NewClient(&redis.Options{
-// 		Addr:     "localhost:6379",
-// 		Password: "", // no password set
-// 		DB:       0,  // use default DB
-// 	})
-// }
+	rdb := redis.NewClient(&redis.Options{
+		Addr: os.Getenv("REDIS_ADDR"),
+		DB:   0,
+	})
+
+	for _, v := range dict {
+		marshal, err := json.Marshal(v)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := rdb.RPush(ctx, os.Getenv("LIST_NAME"), marshal).Err(); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
