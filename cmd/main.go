@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"time"
 
@@ -19,8 +19,12 @@ type Dict struct {
 	Description   string `json:"description"`
 }
 
-func main() {
-	// env
+type Data struct {
+	ctx context.Context
+	rdb *redis.Client
+}
+
+func NewData() *Data {
 	_ = godotenv.Load("../.env")
 
 	rdb := redis.NewClient(&redis.Options{
@@ -28,14 +32,28 @@ func main() {
 		DB:   0,
 	})
 
-	jsonPath := "../dict.json"
-	dict, _ := jsonDecode(jsonPath)
+	ctx := context.Background()
 
-	redisConn(rdb, dict)
+	return &Data{
+		ctx: ctx,
+		rdb: rdb,
+	}
+}
+
+func main() {
+	data := NewData()
+
+	jsonPath := "../dict.json"
+	dict, err := data.jsonDecode(jsonPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	data.redisConn(dict)
 
 }
 
-func jsonDecode(jsonPath string) ([]Dict, error) {
+func (ctx *Data) jsonDecode(jsonPath string) ([]Dict, error) {
 	file, err := os.Open(jsonPath)
 	if err != nil {
 		log.Fatal(err)
@@ -51,18 +69,32 @@ func jsonDecode(jsonPath string) ([]Dict, error) {
 	return dict, nil
 }
 
-func redisConn(rdb *redis.Client, dict []Dict) {
-	ctx := context.Background()
+func (ctx *Data) redisConn(dict []Dict) {
 
 	for _, v := range dict {
 		marshal, err := json.Marshal(v)
 		if err != nil {
 			log.Fatal(err)
 		}
-		key := fmt.Sprintf("word:%s", v.Word)
 
-		if err := rdb.SetEx(ctx, key, marshal, 15*time.Second).Err(); err != nil {
+		_ = ctx.rdb.LPush(ctx.ctx, os.Getenv("LIST_NAME"), marshal).Err()
+
+	}
+
+	length, err := ctx.rdb.LLen(ctx.ctx, os.Getenv("LIST_NAME")).Result()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for {
+		random := rand.Intn(int(length))
+
+		element, err := ctx.rdb.LIndex(ctx.ctx, os.Getenv("LIST_NAME"), int64(random)).Result()
+		if err != nil {
 			log.Fatal(err)
 		}
+		_ = ctx.rdb.LRem(ctx.ctx, os.Getenv("LIST_NAME"), 1, element)
+
+		time.Sleep(time.Second * 5)
 	}
 }
