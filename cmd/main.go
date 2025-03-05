@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	prm "redis/cmd/prometheus"
+	prm "redis/cmd/prometh"
 
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -91,7 +91,9 @@ func (ctx *Data) redisConn(dict []Dict) {
 
 	}
 
-	for {
+	init_value, _ := ctx.rdb.LLen(ctx.ctx, os.Getenv("LIST_NAME")).Result()
+
+	for i := init_value; i != 0; i-- {
 
 		length, err := ctx.rdb.LLen(ctx.ctx, os.Getenv("LIST_NAME")).Result()
 		if err != nil {
