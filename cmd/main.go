@@ -91,12 +91,12 @@ func (ctx *Data) redisConn(dict []Dict) {
 
 	}
 
-	length, err := ctx.rdb.LLen(ctx.ctx, os.Getenv("LIST_NAME")).Result()
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	for {
+
+		length, err := ctx.rdb.LLen(ctx.ctx, os.Getenv("LIST_NAME")).Result()
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		random := rand.Intn(int(length))
 
@@ -110,7 +110,7 @@ func (ctx *Data) redisConn(dict []Dict) {
 
 		prm.RedisPopTotal.WithLabelValues("delete").Inc()
 
-		log.Printf("Deleted element: %s (remaining: %d)\n", element, length-1)
+		log.Printf("Deleted element: %s (remaining: %d)\n", element, length)
 
 		time.Sleep(time.Second * 5)
 	}
